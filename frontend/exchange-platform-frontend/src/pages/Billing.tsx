@@ -8,7 +8,7 @@ import { Separator } from '@/components/ui/separator';
 import { CreditCard, Check, X, Clock, ArrowRight } from 'lucide-react';
 
 function formatPrice(cents: number, currency: string): string {
-  return new Intl.NumberFormat('en-EU', {
+  return new Intl.NumberFormat('en-IE', {
     style: 'currency',
     currency,
   }).format(cents / 100);

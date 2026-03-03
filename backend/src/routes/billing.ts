@@ -1,8 +1,12 @@
 import express, { Response } from 'express';
+import crypto from 'crypto';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import prisma from '../models/prisma';
 import * as revolut from '../services/revolut';
 import { db } from '../models/database';
+
+const REVOLUT_WEBHOOK_SECRET = process.env.REVOLUT_WEBHOOK_SECRET || '';
+const WEBHOOK_TIMESTAMP_TOLERANCE_MS = 5 * 60 * 1000; // 5 minutes
 
 const router = express.Router();
 
@@ -306,6 +310,49 @@ router.get('/payments', authenticate, async (req: AuthRequest, res: Response): P
 /** POST /api/billing/webhook/revolut – handle Revolut webhook events */
 router.post('/webhook/revolut', async (req, res: Response): Promise<void> => {
   try {
+    // ── Verify Revolut webhook signature ──────────────────────────────
+    if (REVOLUT_WEBHOOK_SECRET) {
+      const signatureHeader = req.headers['revolut-signature'] as string | undefined;
+      if (!signatureHeader) {
+        res.status(401).json({ error: 'Missing Revolut-Signature header' });
+        return;
+      }
+
+      // Revolut signature format: v1=<signature>,t=<timestamp>
+      const parts: Record<string, string> = {};
+      for (const part of signatureHeader.split(',')) {
+        const [key, ...rest] = part.split('=');
+        parts[key.trim()] = rest.join('=').trim();
+      }
+
+      const signature = parts['v1'];
+      const timestamp = parts['t'];
+
+      if (!signature || !timestamp) {
+        res.status(401).json({ error: 'Invalid Revolut-Signature format' });
+        return;
+      }
+
+      // Check timestamp to prevent replay attacks
+      const timestampMs = parseInt(timestamp, 10) * 1000;
+      if (Math.abs(Date.now() - timestampMs) > WEBHOOK_TIMESTAMP_TOLERANCE_MS) {
+        res.status(401).json({ error: 'Webhook timestamp too old' });
+        return;
+      }
+
+      // Verify HMAC-SHA256 signature
+      const payload = `${timestamp}.${JSON.stringify(req.body)}`;
+      const expected = crypto
+        .createHmac('sha256', REVOLUT_WEBHOOK_SECRET)
+        .update(payload)
+        .digest('hex');
+
+      if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+        res.status(401).json({ error: 'Invalid webhook signature' });
+        return;
+      }
+    }
+
     const { event, order_id } = req.body as revolut.RevolutWebhookPayload;
 
     if (!order_id) {
