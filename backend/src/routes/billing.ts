@@ -2,6 +2,7 @@ import express, { Response } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import prisma from '../models/prisma';
 import * as revolut from '../services/revolut';
+import { db } from '../models/database';
 
 const router = express.Router();
 
@@ -77,7 +78,9 @@ router.post('/subscribe', authenticate, async (req: AuthRequest, res: Response):
       return;
     }
 
-    const user = await prisma.user.findUnique({ where: { id: req.userId! } });
+    // Users live in the in-memory store (not yet migrated to Prisma),
+    // so look them up there instead of via prisma.user.
+    const user = db.getUserById(req.userId!);
     if (!user) {
       res.status(404).json({ error: 'User not found' });
       return;
