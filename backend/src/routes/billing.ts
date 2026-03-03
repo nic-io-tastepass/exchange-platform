@@ -5,7 +5,7 @@ import prisma from '../models/prisma';
 import * as revolut from '../services/revolut';
 import { db } from '../models/database';
 
-const REVOLUT_WEBHOOK_SECRET = process.env.REVOLUT_WEBHOOK_SECRET || '';
+const getWebhookSecret = () => process.env.REVOLUT_WEBHOOK_SECRET || '';
 const WEBHOOK_TIMESTAMP_TOLERANCE_MS = 5 * 60 * 1000; // 5 minutes
 
 const router = express.Router();
@@ -311,7 +311,8 @@ router.get('/payments', authenticate, async (req: AuthRequest, res: Response): P
 router.post('/webhook/revolut', async (req, res: Response): Promise<void> => {
   try {
     // ── Verify Revolut webhook signature ──────────────────────────────
-    if (REVOLUT_WEBHOOK_SECRET) {
+    const webhookSecret = getWebhookSecret();
+    if (webhookSecret) {
       const signatureHeader = req.headers['revolut-signature'] as string | undefined;
       if (!signatureHeader) {
         res.status(401).json({ error: 'Missing Revolut-Signature header' });
@@ -343,11 +344,13 @@ router.post('/webhook/revolut', async (req, res: Response): Promise<void> => {
       // Verify HMAC-SHA256 signature
       const payload = `${timestamp}.${JSON.stringify(req.body)}`;
       const expected = crypto
-        .createHmac('sha256', REVOLUT_WEBHOOK_SECRET)
+        .createHmac('sha256', webhookSecret)
         .update(payload)
         .digest('hex');
 
-      if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+      const sigBuf = Buffer.from(signature);
+      const expBuf = Buffer.from(expected);
+      if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
         res.status(401).json({ error: 'Invalid webhook signature' });
         return;
       }
