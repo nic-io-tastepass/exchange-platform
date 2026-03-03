@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Home, MessageCircle, Package, Settings, LogOut, Menu } from 'lucide-react';
+import { Home, MessageCircle, Package, Settings, LogOut, Menu, CreditCard } from 'lucide-react';
 import { useState } from 'react';
 
 export default function Navigation() {
@@ -49,6 +49,12 @@ export default function Navigation() {
                 Settings
               </Button>
             </Link>
+            <Link to="/billing">
+              <Button variant="ghost" size="sm">
+                <CreditCard className="mr-2 h-4 w-4" />
+                Billing
+              </Button>
+            </Link>
             <Button variant="ghost" size="sm" onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
               Logout
@@ -87,6 +93,12 @@ export default function Navigation() {
               <Button variant="ghost" size="sm" className="w-full justify-start">
                 <Settings className="mr-2 h-4 w-4" />
                 Settings
+              </Button>
+            </Link>
+            <Link to="/billing" onClick={() => setMobileMenuOpen(false)}>
+              <Button variant="ghost" size="sm" className="w-full justify-start">
+                <CreditCard className="mr-2 h-4 w-4" />
+                Billing
               </Button>
             </Link>
             <Button
