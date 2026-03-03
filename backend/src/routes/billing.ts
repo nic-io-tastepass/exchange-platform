@@ -325,48 +325,54 @@ router.post('/webhook/revolut', async (req, res: Response): Promise<void> => {
   try {
     // ── Verify Revolut webhook signature ──────────────────────────────
     const webhookSecret = getWebhookSecret();
-    if (webhookSecret) {
-      const signatureHeader = req.headers['revolut-signature'] as string | undefined;
-      if (!signatureHeader) {
-        res.status(401).json({ error: 'Missing Revolut-Signature header' });
-        return;
-      }
+    if (!webhookSecret) {
+      console.error('REVOLUT_WEBHOOK_SECRET is not configured – rejecting webhook');
+      res.status(500).json({ error: 'Webhook secret not configured' });
+      return;
+    }
 
-      // Revolut signature format: v1=<signature>,t=<timestamp>
-      const parts: Record<string, string> = {};
-      for (const part of signatureHeader.split(',')) {
-        const [key, ...rest] = part.split('=');
-        parts[key.trim()] = rest.join('=').trim();
-      }
+    const signatureHeader = req.headers['revolut-signature'] as string | undefined;
+    if (!signatureHeader) {
+      res.status(401).json({ error: 'Missing Revolut-Signature header' });
+      return;
+    }
 
-      const signature = parts['v1'];
-      const timestamp = parts['t'];
+    // Revolut signature format: v1=<signature>,t=<timestamp>
+    const parts: Record<string, string> = {};
+    for (const part of signatureHeader.split(',')) {
+      const [key, ...rest] = part.split('=');
+      parts[key.trim()] = rest.join('=').trim();
+    }
 
-      if (!signature || !timestamp) {
-        res.status(401).json({ error: 'Invalid Revolut-Signature format' });
-        return;
-      }
+    const signature = parts['v1'];
+    const timestamp = parts['t'];
 
-      // Check timestamp to prevent replay attacks
-      const timestampMs = parseInt(timestamp, 10) * 1000;
-      if (Math.abs(Date.now() - timestampMs) > WEBHOOK_TIMESTAMP_TOLERANCE_MS) {
-        res.status(401).json({ error: 'Webhook timestamp too old' });
-        return;
-      }
+    if (!signature || !timestamp) {
+      res.status(401).json({ error: 'Invalid Revolut-Signature format' });
+      return;
+    }
 
-      // Verify HMAC-SHA256 signature
-      const payload = `${timestamp}.${JSON.stringify(req.body)}`;
-      const expected = crypto
-        .createHmac('sha256', webhookSecret)
-        .update(payload)
-        .digest('hex');
+    // Check timestamp to prevent replay attacks
+    const timestampMs = parseInt(timestamp, 10) * 1000;
+    if (Math.abs(Date.now() - timestampMs) > WEBHOOK_TIMESTAMP_TOLERANCE_MS) {
+      res.status(401).json({ error: 'Webhook timestamp too old' });
+      return;
+    }
 
-      const sigBuf = Buffer.from(signature);
-      const expBuf = Buffer.from(expected);
-      if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
-        res.status(401).json({ error: 'Invalid webhook signature' });
-        return;
-      }
+    // Verify HMAC-SHA256 signature using raw body to preserve original byte sequence
+    const rawBody = (req as any).rawBody as Buffer | undefined;
+    const bodyStr = rawBody ? rawBody.toString('utf8') : JSON.stringify(req.body);
+    const payload = `${timestamp}.${bodyStr}`;
+    const expected = crypto
+      .createHmac('sha256', webhookSecret)
+      .update(payload)
+      .digest('hex');
+
+    const sigBuf = Buffer.from(signature);
+    const expBuf = Buffer.from(expected);
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+      res.status(401).json({ error: 'Invalid webhook signature' });
+      return;
     }
 
     const { event, order_id } = req.body as revolut.RevolutWebhookPayload;

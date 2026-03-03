@@ -19,7 +19,12 @@ app.use(cors({
   credentials: true,
 }));
 
-app.use(express.json());
+app.use(express.json({
+  verify: (req: any, _res, buf) => {
+    // Preserve the raw body buffer for webhook signature verification
+    req.rawBody = buf;
+  },
+}));
 app.use(cookieParser());
 
 app.use('/api/auth', authRoutes);
