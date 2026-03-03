@@ -90,6 +90,19 @@ router.post('/subscribe', authenticate, async (req: AuthRequest, res: Response):
       return;
     }
 
+    // Ensure the user record exists in Prisma so FK constraints are satisfied.
+    // The password is already hashed in the in-memory store.
+    await prisma.user.upsert({
+      where: { id: req.userId! },
+      update: { email: user.email, name: user.name },
+      create: {
+        id: req.userId!,
+        email: user.email,
+        name: user.name,
+        password: user.password,
+      },
+    });
+
     const amount = interval === 'yearly' ? plan.priceYearly : plan.priceMonthly;
 
     // Free plan – just create the subscription directly
