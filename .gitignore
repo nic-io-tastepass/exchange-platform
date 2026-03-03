@@ -28,6 +28,10 @@ Thumbs.db
 # Testing
 coverage/
 
+# Prisma
+*.db
+*.db-journal
+
 # Misc
 *.tsbuildinfo
 .cache/

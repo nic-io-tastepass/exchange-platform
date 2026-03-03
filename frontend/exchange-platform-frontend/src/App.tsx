@@ -9,6 +9,7 @@ import CreateListing from './pages/CreateListing';
 import Offers from './pages/Offers';
 import Messages from './pages/Messages';
 import Settings from './pages/Settings';
+import Billing from './pages/Billing';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -104,6 +105,14 @@ function AppRoutes() {
           element={
             <PrivateRoute>
               <Settings />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/billing"
+          element={
+            <PrivateRoute>
+              <Billing />
             </PrivateRoute>
           }
         />

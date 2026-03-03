@@ -57,6 +57,43 @@ export interface Message {
   sender?: { id: string; name: string };
 }
 
+export interface Plan {
+  id: string;
+  name: string;
+  displayName: string;
+  description: string;
+  priceMonthly: number;
+  priceYearly: number;
+  currency: string;
+  features: string[];
+  maxListings: number;
+  highlighted: boolean;
+  sortOrder: number;
+}
+
+export interface Subscription {
+  id: string;
+  userId: string;
+  planId: string;
+  status: string;
+  billingInterval: string;
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  cancelAtPeriodEnd: boolean;
+  plan: Plan;
+}
+
+export interface Payment {
+  id: string;
+  userId: string;
+  amount: number;
+  currency: string;
+  status: string;
+  revolutOrderId?: string;
+  description?: string;
+  createdAt: string;
+}
+
 class ApiClient {
   private token: string | null = null;
 
@@ -262,6 +299,39 @@ class ApiClient {
       method: 'PATCH',
       body: JSON.stringify(updates),
     });
+  }
+
+  // ── Billing ──────────────────────────────────────────────────────────
+
+  async getPlans(): Promise<Plan[]> {
+    return this.request('/api/billing/plans');
+  }
+
+  async getSubscription(): Promise<{ subscription: Subscription | null }> {
+    return this.request('/api/billing/subscription');
+  }
+
+  async subscribe(planId: string, billingInterval: 'monthly' | 'yearly') {
+    return this.request('/api/billing/subscribe', {
+      method: 'POST',
+      body: JSON.stringify({ planId, billingInterval }),
+    });
+  }
+
+  async cancelSubscription() {
+    return this.request('/api/billing/cancel', { method: 'POST' });
+  }
+
+  async resumeSubscription() {
+    return this.request('/api/billing/resume', { method: 'POST' });
+  }
+
+  async getPayments(): Promise<Payment[]> {
+    return this.request('/api/billing/payments');
+  }
+
+  async getBillingConfig(): Promise<{ revolutConfigured: boolean }> {
+    return this.request('/api/billing/config');
   }
 }
 

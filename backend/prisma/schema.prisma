@@ -1,0 +1,168 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                  String               @id @default(uuid())
+  email               String               @unique
+  password            String
+  name                String
+  totpSecret          String?
+  totpEnabled         Boolean              @default(false)
+  createdAt           DateTime             @default(now())
+  webauthnCredentials WebAuthnCredential[]
+  listings            Listing[]
+  sentOffers          Offer[]              @relation("OfferFrom")
+  receivedOffers      Offer[]              @relation("OfferTo")
+  threads             ThreadParticipant[]
+  sentMessages        Message[]
+  reviewsGiven        Review[]             @relation("ReviewFrom")
+  reviewsReceived     Review[]             @relation("ReviewTo")
+  subscription        Subscription?
+  payments            Payment[]
+}
+
+model WebAuthnCredential {
+  id                  String @id @default(uuid())
+  userId              String
+  credentialID        Bytes
+  credentialPublicKey Bytes
+  counter             Int    @default(0)
+  transports          String @default("") // JSON array stored as string
+  user                User   @relation(fields: [userId], references: [id])
+}
+
+model Listing {
+  id          String   @id @default(uuid())
+  userId      String
+  title       String
+  description String
+  category    String
+  type        String   // 'good' | 'interest'
+  images      String   @default("[]") // JSON array stored as string
+  status      String   @default("active") // 'active' | 'completed' | 'cancelled'
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id])
+  offers      Offer[]
+  threads     Thread[]
+}
+
+model Offer {
+  id           String   @id @default(uuid())
+  listingId    String
+  fromUserId   String
+  toUserId     String
+  message      String
+  offerDetails String
+  status       String   @default("pending") // 'pending' | 'accepted' | 'declined' | 'cancelled'
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  listing      Listing  @relation(fields: [listingId], references: [id])
+  fromUser     User     @relation("OfferFrom", fields: [fromUserId], references: [id])
+  toUser       User     @relation("OfferTo", fields: [toUserId], references: [id])
+  reviews      Review[]
+}
+
+model Thread {
+  id           String              @id @default(uuid())
+  listingId    String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  listing      Listing?            @relation(fields: [listingId], references: [id])
+  participants ThreadParticipant[]
+  messages     Message[]
+}
+
+model ThreadParticipant {
+  id       String @id @default(uuid())
+  threadId String
+  userId   String
+  thread   Thread @relation(fields: [threadId], references: [id])
+  user     User   @relation(fields: [userId], references: [id])
+
+  @@unique([threadId, userId])
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  threadId  String
+  senderId  String
+  content   String
+  createdAt DateTime @default(now())
+  thread    Thread   @relation(fields: [threadId], references: [id])
+  sender    User     @relation(fields: [senderId], references: [id])
+}
+
+model Review {
+  id         String   @id @default(uuid())
+  fromUserId String
+  toUserId   String
+  offerId    String
+  rating     Int
+  comment    String
+  createdAt  DateTime @default(now())
+  fromUser   User     @relation("ReviewFrom", fields: [fromUserId], references: [id])
+  toUser     User     @relation("ReviewTo", fields: [toUserId], references: [id])
+  offer      Offer    @relation(fields: [offerId], references: [id])
+}
+
+// --- Billing & Subscription Models ---
+
+model Plan {
+  id            String         @id @default(uuid())
+  name          String         @unique // e.g. 'free', 'starter', 'professional', 'enterprise'
+  displayName   String
+  description   String
+  priceMonthly  Int            // price in cents
+  priceYearly   Int            // price in cents
+  currency      String         @default("EUR")
+  features      String         @default("[]") // JSON array stored as string
+  maxListings   Int            @default(-1) // -1 = unlimited
+  highlighted   Boolean        @default(false)
+  sortOrder     Int            @default(0)
+  active        Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id                    String    @id @default(uuid())
+  userId                String    @unique
+  planId                String
+  status                String    @default("active") // 'active' | 'cancelled' | 'past_due' | 'trialing'
+  billingInterval       String    @default("monthly") // 'monthly' | 'yearly'
+  currentPeriodStart    DateTime  @default(now())
+  currentPeriodEnd      DateTime
+  cancelAtPeriodEnd     Boolean   @default(false)
+  revolutOrderId        String?   // Revolut order ID for recurring billing
+  revolutCustomerId     String?   // Revolut customer ID
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id])
+  plan                  Plan      @relation(fields: [planId], references: [id])
+}
+
+model Payment {
+  id               String   @id @default(uuid())
+  userId           String
+  amount           Int      // amount in cents
+  currency         String   @default("EUR")
+  status           String   @default("pending") // 'pending' | 'completed' | 'failed' | 'refunded'
+  revolutOrderId   String?  @unique // Revolut payment order ID
+  revolutPaymentId String?  // Revolut payment ID
+  description      String?
+  metadata         String?  @default("{}") // JSON stored as string
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  user             User     @relation(fields: [userId], references: [id])
+}
